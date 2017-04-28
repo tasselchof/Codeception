@@ -146,10 +146,9 @@ class ZF2 extends Client
         }
 
         if ($service === 'Doctrine\ORM\EntityManager' && !isset($this->persistentServiceManager)) {
-            if (!method_exists($serviceManager, 'addPeeringServiceManager')) {
-                throw new ModuleException('Codeception\Module\ZF2', 'integration with Doctrine2 module is not compatible with ZF3');
+            if (method_exists($serviceManager, 'addPeeringServiceManager')) {
+                $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
             }
-            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
         }
 
         return $serviceManager->get($service);
@@ -159,16 +158,16 @@ class ZF2 extends Client
     {
         if (!isset($this->persistentServiceManager)) {
             $serviceManager = $this->application->getServiceManager();
-            if (!method_exists($serviceManager, 'addPeeringServiceManager')) {
-                throw new ModuleException('Codeception\Module\ZF2', 'addServiceToContainer method is not compatible with ZF3');
+            if (method_exists($serviceManager, 'addPeeringServiceManager')) {
+                $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
+                $serviceManager->addPeeringServiceManager($this->persistentServiceManager);
+                $serviceManager->setRetrieveFromPeeringManagerFirst(true);
+
+                $this->persistentServiceManager->setAllowOverride(true);
+                $this->persistentServiceManager->setService($name, $service);
+                $this->persistentServiceManager->setAllowOverride(false);
             }
-            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
-            $serviceManager->addPeeringServiceManager($this->persistentServiceManager);
-            $serviceManager->setRetrieveFromPeeringManagerFirst(true);
         }
-        $this->persistentServiceManager->setAllowOverride(true);
-        $this->persistentServiceManager->setService($name, $service);
-        $this->persistentServiceManager->setAllowOverride(false);
     }
 
     private function createApplication()
@@ -176,7 +175,10 @@ class ZF2 extends Client
         $this->application = Application::init($this->applicationConfig);
         $serviceManager = $this->application->getServiceManager();
 
-        if (isset($this->persistentServiceManager)) {
+        if (
+            isset($this->persistentServiceManager) &&
+            method_exists($serviceManager, 'addPeeringServiceManager')
+        ) {
             $serviceManager->addPeeringServiceManager($this->persistentServiceManager);
             $serviceManager->setRetrieveFromPeeringManagerFirst(true);
         }
