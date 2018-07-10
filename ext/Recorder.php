@@ -7,23 +7,21 @@ use Codeception\Events;
 use Codeception\Exception\ExtensionException;
 use Codeception\Lib\Interfaces\ScreenshotSaver;
 use Codeception\Module\WebDriver;
+use Codeception\Step;
 use Codeception\Step\Comment as CommentStep;
 use Codeception\Test\Descriptor;
 use Codeception\Util\FileSystem;
 use Codeception\Util\Template;
 
 /**
- * Saves screenshots of each step in acceptance tests and shows them as a slideshow.
+ * Saves a screenshot of each step in acceptance tests and shows them as a slideshow on one HTML page (here's an [example](http://codeception.com/images/recorder.gif))
  * Activated only for suites with WebDriver module enabled.
  *
- *  ![recorder](http://codeception.com/images/recorder.gif)
- *
- * Slideshows saves are saved into `tests/_output/record_*` directories.
- * Open `index.html` to see the slideshow.
+ * The screenshots are saved to `tests/_output/record_*` directories, open `index.html` to see them as a slideshow.
  *
  * #### Installation
  *
- * Add to list of enabled extensions
+ * Add this to the list of enabled extensions in `codeception.yml` or `acceptance.suite.yml`:
  *
  * ``` yaml
  * extensions:
@@ -33,8 +31,9 @@ use Codeception\Util\Template;
  *
  * #### Configuration
  *
- * * `delete_successful` (default: true) - delete records for successfully passed tests (log only failed and errored)
- * * `module` (default: WebDriver) - which module for screenshots to use. Set `AngularJS` if you want to use it with AngularJS module. Generally, module should implement `Codeception\Lib\Interfaces\ScreenshotSaver` interface.
+ * * `delete_successful` (default: true) - delete screenshots for successfully passed tests  (i.e. log only failed and errored tests).
+ * * `module` (default: WebDriver) - which module for screenshots to use. Set `AngularJS` if you want to use it with AngularJS module. Generally, the module should implement `Codeception\Lib\Interfaces\ScreenshotSaver` interface.
+ * * `ignore_steps` (default: []) - array of step names that should not be recorded, * wildcards supported
  *
  *
  * #### Examples:
@@ -42,9 +41,10 @@ use Codeception\Util\Template;
  * ``` yaml
  * extensions:
  *     enabled:
- *         Codeception\Extension\Recorder:
+ *         - Codeception\Extension\Recorder:
  *             module: AngularJS # enable for Angular
- *             delete_successful: false # show successful reports
+ *             delete_successful: false # keep screenshots of successful tests
+ *             ignore_steps: [have, grab*]
  * ```
  *
  */
@@ -54,7 +54,8 @@ class Recorder extends \Codeception\Extension
         'delete_successful' => true,
         'module'            => 'WebDriver',
         'template'          => null,
-        'animate_slides'    => true
+        'animate_slides'    => true,
+        'ignore_steps'      => []
     ];
 
     protected $template = <<<EOF
@@ -280,7 +281,7 @@ EOF;
         $this->dir = null;
         $this->stepNum = 0;
         $this->slides = [];
-        $testName = preg_replace('~\W~', '.', Descriptor::getTestAsString($e->getTest()));
+        $testName = preg_replace('~\W~', '_', Descriptor::getTestAsString($e->getTest()));
         $this->dir = codecept_output_dir() . "record_{$this->seed}_$testName";
         @mkdir($this->dir);
     }
@@ -342,10 +343,29 @@ EOF;
         if ($e->getStep() instanceof CommentStep) {
             return;
         }
+        if ($this->isStepIgnored($e->getStep())) {
+            return;
+        }
 
         $filename = str_pad($this->stepNum, 3, "0", STR_PAD_LEFT) . '.png';
         $this->webDriverModule->_saveScreenshot($this->dir . DIRECTORY_SEPARATOR . $filename);
         $this->stepNum++;
         $this->slides[$filename] = $e->getStep();
+    }
+
+    /**
+     * @param Step $step
+     * @return bool
+     */
+    protected function isStepIgnored($step)
+    {
+        foreach ($this->config['ignore_steps'] as $stepPattern) {
+            $stepRegexp = '/^' . str_replace('*', '.*?', $stepPattern) . '$/i';
+            if (preg_match($stepRegexp, $step->getAction())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

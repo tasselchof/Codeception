@@ -1,12 +1,13 @@
 <?php
 
+use Codeception\Test\Unit;
 use Codeception\Util\Stub as Stub;
 
 /**
  * Class RestTest
  * @group appveyor
  */
-class RestTest extends \PHPUnit_Framework_TestCase
+class RestTest extends Unit
 {
     /**
      * @var \Codeception\Module\REST
@@ -108,7 +109,7 @@ class RestTest extends \PHPUnit_Framework_TestCase
 
     public function testInvalidJson()
     {
-        $this->setExpectedException('PHPUnit_Framework_ExpectationFailedException');
+        $this->setExpectedException('PHPUnit\Framework\ExpectationFailedException');
         $this->setStubResponse('{xxx = yyy}');
         $this->module->seeResponseIsJson();
     }
@@ -123,7 +124,7 @@ class RestTest extends \PHPUnit_Framework_TestCase
 
     public function testInvalidXml()
     {
-        $this->setExpectedException('PHPUnit_Framework_ExpectationFailedException');
+        $this->setExpectedException('PHPUnit\Framework\ExpectationFailedException');
         $this->setStubResponse('<xml><name>John</surname></xml>');
         $this->module->seeResponseIsXml();
     }
@@ -365,7 +366,7 @@ class RestTest extends \PHPUnit_Framework_TestCase
         try {
             $this->module->seeResponseMatchesJsonType(['zzz' => 'string']);
             $this->fail('it had to throw exception');
-        } catch (PHPUnit_Framework_AssertionFailedError $e) {
+        } catch (PHPUnit\Framework\AssertionFailedError $e) {
             $this->assertEquals('Key `zzz` doesn\'t exist in {"xxx":"yyy","user_id":1}', $e->getMessage());
         }
     }
@@ -376,7 +377,7 @@ class RestTest extends \PHPUnit_Framework_TestCase
         try {
             $this->module->dontSeeResponseMatchesJsonType(['xxx' => 'string']);
             $this->fail('it had to throw exception');
-        } catch (PHPUnit_Framework_AssertionFailedError $e) {
+        } catch (PHPUnit\Framework\AssertionFailedError $e) {
             $this->assertEquals('Unexpectedly response matched: {"xxx":"yyy","user_id":1}', $e->getMessage());
         }
     }
@@ -427,9 +428,15 @@ class RestTest extends \PHPUnit_Framework_TestCase
         $this->module->dontSeeBinaryResponseEquals('024f615102cdb3c8c7cf75cdc5a83d15');
     }
 
+    public function testAmDigestAuthenticatedThrowsExceptionWithFunctionalModules()
+    {
+        $this->setExpectedException('\Codeception\Exception\ModuleException', 'Not supported by functional modules');
+        $this->module->amDigestAuthenticated('username', 'password');
+    }
+
     protected function shouldFail()
     {
-        $this->setExpectedException('PHPUnit_Framework_AssertionFailedError');
+        $this->setExpectedException('PHPUnit\Framework\AssertionFailedError');
     }
 }
 
