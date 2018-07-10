@@ -21,7 +21,6 @@ class PhpBrowserTest extends TestsForBrowsers
         $url = 'http://localhost:8000';
         $this->module->_setConfig(array('url' => $url));
         $this->module->_initialize();
-        $this->module->_cleanup();
         $this->module->_before($this->makeTest());
         if (class_exists('GuzzleHttp\Url')) {
             $this->history = new \GuzzleHttp\Subscriber\History();
@@ -35,11 +34,11 @@ class PhpBrowserTest extends TestsForBrowsers
     {
         if (is_array($this->history)) {
             return end($this->history)['request'];
-        } else {
-            return $this->history->getLastRequest();
         }
+
+        return $this->history->getLastRequest();
     }
-    
+
     protected function tearDown()
     {
         if ($this->module) {
@@ -72,6 +71,14 @@ class PhpBrowserTest extends TestsForBrowsers
         $this->module->click('Ссылочка');
     }
 
+    /**
+     * @see https://github.com/Codeception/Codeception/issues/4509
+     */
+    public function testSeeTextAfterJSComparisionOperator()
+    {
+        $this->module->amOnPage('/info');
+        $this->module->see('Text behind JS comparision');
+    }
 
     public function testSetMultipleCookies()
     {
@@ -136,7 +143,7 @@ class PhpBrowserTest extends TestsForBrowsers
         $this->module->amOnPage('/redirect2');
         $this->module->seeResponseCodeIs(200);
         $this->module->seeCurrentUrlEquals('/info');
-        
+
         $this->module->amOnPage('/redirect_interval');
         $this->module->seeCurrentUrlEquals('/redirect_interval');
     }
@@ -165,13 +172,13 @@ class PhpBrowserTest extends TestsForBrowsers
         $this->module->seeResponseCodeIs(200);
         $this->module->seeCurrentUrlEquals('/redirect_meta_refresh');
     }
-    
+
     public function testRefreshRedirect()
     {
         $this->module->amOnPage('/redirect3');
         $this->module->seeResponseCodeIs(200);
         $this->module->seeCurrentUrlEquals('/info');
-        
+
         $this->module->amOnPage('/redirect_header_interval');
         $this->module->seeCurrentUrlEquals('/redirect_header_interval');
         $this->module->see('Welcome to test app!');
@@ -273,9 +280,9 @@ class PhpBrowserTest extends TestsForBrowsers
 
     public function testRedirectToAnotherDomainUsingSchemalessUrl()
     {
-        $this->module->amOnUrl('http://httpbin.org/redirect-to?url=//codeception.com/');
+        $this->module->amOnUrl('http://httpbin.org/redirect-to?url=//example.org/');
         $currentUrl = $this->module->client->getHistory()->current()->getUri();
-        $this->assertSame('http://codeception.com/', $currentUrl);
+        $this->assertSame('http://example.org/', $currentUrl);
     }
 
     public function testSetCookieByHeader()
@@ -314,20 +321,6 @@ class PhpBrowserTest extends TestsForBrowsers
         $form = data::get('form');
         $this->assertEquals('jon', $form['name']);
         $this->module->seeCurrentUrlEquals('/form/example3?validate=yes');
-    }
-
-    public function testHeadersByConfig()
-    {
-        $this->module->_setConfig(['headers' => ['xxx' => 'yyyy']]);
-        $this->module->_initialize();
-        $this->module->amOnPage('/form1');
-
-        if (method_exists($this->module->guzzle, 'getConfig')) {
-            $headers = $this->module->guzzle->getConfig('headers');
-        } else {
-            $headers = $this->module->guzzle->getDefaultOption('headers');
-        }
-        $this->assertArrayHasKey('xxx', $headers);
     }
 
     public function testHeadersBySetHeader()
@@ -369,6 +362,9 @@ class PhpBrowserTest extends TestsForBrowsers
 
     public function testCurlSslOptions()
     {
+        if (getenv('WERCKER_ROOT')) {
+            $this->markTestSkipped('Disabled on Wercker CI');
+        }
         $this->module->_setConfig(array(
             'url' => 'https://google.com',
             'curl' => array(
@@ -443,7 +439,7 @@ class PhpBrowserTest extends TestsForBrowsers
         $this->module->attachFile('foo[bar]', 'app/avatar.jpg');
         $this->module->click('Submit');
     }
-    
+
     public function testDoubleSlash()
     {
         $I = $this->module;
@@ -459,7 +455,7 @@ class PhpBrowserTest extends TestsForBrowsers
         $this->setExpectedException("\\Codeception\\Exception\\ModuleException");
         $this->module->fillField('#name', 'Nothing special');
     }
-    
+
     public function testArrayFieldSubmitForm()
     {
         $this->skipForOldGuzzle();
@@ -612,7 +608,7 @@ class PhpBrowserTest extends TestsForBrowsers
     }
 
     /**
-     * @expectedException PHPUnit_Framework_AssertionFailedError
+     * @expectedException PHPUnit\Framework\AssertionFailedError
      */
     public function testClickingOnButtonOutsideFormDoesNotCauseFatalError()
     {
@@ -673,5 +669,62 @@ HTML
         ;
         $sourceActual = $this->module->grabPageSource();
         $this->assertXmlStringEqualsXmlString($sourceExpected, $sourceActual);
+    }
+
+    /**
+     * @issue https://github.com/Codeception/Codeception/issues/4383
+     */
+    public function testSecondAmOnUrlWithEmptyPath()
+    {
+        $this->module->amOnUrl('http://localhost:8000/info');
+        $this->module->see('Lots of valuable data here');
+        $this->module->amOnUrl('http://localhost:8000');
+        $this->module->dontSee('Lots of valuable data here');
+    }
+
+    public function testSetUserAgentUsingConfig()
+    {
+        $this->module->_setConfig(['headers' => ['User-Agent' => 'Codeception User Agent Test 1.0']]);
+        $this->module->_initialize();
+
+        $this->module->amOnPage('/user-agent');
+        $response = $this->module->grabPageSource();
+        $this->assertEquals('Codeception User Agent Test 1.0', $response, 'Incorrect user agent');
+    }
+
+    public function testIfStatusCodeIsWithin2xxRange()
+    {
+        $this->module->amOnPage('https://httpstat.us/200');
+        $this->module->seeResponseCodeIsSuccessful();
+
+        $this->module->amOnPage('https://httpstat.us/299');
+        $this->module->seeResponseCodeIsSuccessful();
+    }
+
+    public function testIfStatusCodeIsWithin3xxRange()
+    {
+        $this->module->amOnPage('https://httpstat.us/300');
+        $this->module->seeResponseCodeIsRedirection();
+
+        $this->module->amOnPage('https://httpstat.us/399');
+        $this->module->seeResponseCodeIsRedirection();
+    }
+
+    public function testIfStatusCodeIsWithin4xxRange()
+    {
+        $this->module->amOnPage('https://httpstat.us/400');
+        $this->module->seeResponseCodeIsClientError();
+
+        $this->module->amOnPage('https://httpstat.us/499');
+        $this->module->seeResponseCodeIsClientError();
+    }
+
+    public function testIfStatusCodeIsWithin5xxRange()
+    {
+        $this->module->amOnPage('https://httpstat.us/500');
+        $this->module->seeResponseCodeIsServerError();
+
+        $this->module->amOnPage('https://httpstat.us/599');
+        $this->module->seeResponseCodeIsServerError();
     }
 }

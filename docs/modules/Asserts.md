@@ -3,7 +3,6 @@
 
 Special module for using asserts in your tests.
 
-
 ## Actions
 
 ### assertArrayHasKey
@@ -18,6 +17,16 @@ Special module for using asserts in your tests.
  * `param` $key
  * `param` $actual
  * `param` $description
+
+
+### assertArraySubset
+ 
+Checks that array contains subset.
+
+ * `param array`  $subset
+ * `param array`  $array
+ * `param bool`   $strict
+ * `param string` $message
 
 
 ### assertContains
@@ -203,6 +212,14 @@ $I->assertNotEquals($calculator->add(0.1, 0.2), 0.4, 'Calculator should add the 
  * `param float`  $delta
 
 
+### assertNotFalse
+ 
+Checks that the condition is NOT false (everything but false)
+
+ * `param`        $condition
+ * `param string` $message
+
+
 ### assertNotInstanceOf
  
  * `param` $class
@@ -236,6 +253,14 @@ Checks that two variables are not same
  * `param string` $message
 
 
+### assertNotTrue
+ 
+Checks that the condition is NOT true (everything but true)
+
+ * `param`        $condition
+ * `param string` $message
+
+
 ### assertNull
  
 Checks that variable is NULL
@@ -259,6 +284,24 @@ Checks that two variables are same
 
  * `param`        $expected
  * `param`        $actual
+ * `param string` $message
+
+
+### assertStringStartsNotWith
+ 
+Checks that a string doesn't start with the given prefix.
+
+ * `param string` $prefix
+ * `param string` $string
+ * `param string` $message
+
+
+### assertStringStartsWith
+ 
+Checks that a string starts with the given prefix.
+
+ * `param string` $prefix
+ * `param string` $string
  * `param string` $message
 
 
@@ -304,4 +347,4 @@ Fails the test with message.
 
  * `param` $message
 
-<p>&nbsp;</p><div class="alert alert-warning">Module reference is taken from the source code. <a href="https://github.com/Codeception/Codeception/tree/2.2/src/Codeception/Module/Asserts.php">Help us to improve documentation. Edit module reference</a></div>
+<p>&nbsp;</p><div class="alert alert-warning">Module reference is taken from the source code. <a href="https://github.com/Codeception/Codeception/tree/2.4/src/Codeception/Module/Asserts.php">Help us to improve documentation. Edit module reference</a></div>
