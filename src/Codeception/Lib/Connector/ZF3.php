@@ -54,6 +54,11 @@ class ZF3 extends Client
         $this->authData = $authData;
     }
 
+    public function getApplication()
+    {
+        return $this->application;
+    }
+
     /**
      * @param Request $request
      *
