@@ -9,7 +9,7 @@ use Codeception\Lib\Interfaces\PartedModule;
 use Codeception\Util\ReflectionHelper;
 use Zend\Console\Console;
 use Zend\EventManager\StaticEventManager;
-use Codeception\Lib\Connector\ZF2 as ZF2Connector;
+use Codeception\Lib\Connector\ZF3 as ZF3Connector;
 
 /**
  * This module allows you to run tests inside Zend Framework 2 and Zend Framework 3.
@@ -44,7 +44,7 @@ use Codeception\Lib\Connector\ZF2 as ZF2Connector;
  * actor: AcceptanceTester
  * modules:
  *     enabled:
- *         - ZF2:
+ *         - ZF3:
  *             part: services
  *         - Doctrine2:
  *             depends: ZF2
@@ -53,7 +53,7 @@ use Codeception\Lib\Connector\ZF2 as ZF2Connector;
  *             browser: phantomjs
  * ```
  */
-class ZF2 extends Framework implements DoctrineProvider, PartedModule
+class ZF3 extends Framework implements DoctrineProvider, PartedModule
 {
     protected $config = [
         'config' => 'tests/application.config.php',
@@ -70,7 +70,7 @@ class ZF2 extends Framework implements DoctrineProvider, PartedModule
     public $db;
 
     /**
-     * @var \Codeception\Lib\Connector\ZF2
+     * @var \Codeception\Lib\Connector\ZF3
      */
     public $client;
 
@@ -98,13 +98,13 @@ class ZF2 extends Framework implements DoctrineProvider, PartedModule
         Console::overrideIsConsole(false);
 
         //grabServiceFromContainer may need client in beforeClass hooks of modules or helpers
-        $this->client = new ZF2Connector();
+        $this->client = new ZF3Connector();
         $this->client->setApplicationConfig($this->applicationConfig);
     }
 
     public function _before(TestInterface $test)
     {
-        $this->client = new ZF2Connector();
+        $this->client = new ZF3Connector();
         $this->client->setApplicationConfig($this->applicationConfig);
         $_SERVER['REQUEST_URI'] = '';
     }
@@ -117,7 +117,7 @@ class ZF2 extends Framework implements DoctrineProvider, PartedModule
         $_COOKIE = [];
 
         if (class_exists('Zend\EventManager\StaticEventManager')) {
-            // reset singleton (ZF2)
+            // reset singleton (ZF3)
             StaticEventManager::resetInstance();
         }
 
@@ -135,7 +135,7 @@ class ZF2 extends Framework implements DoctrineProvider, PartedModule
     public function _getEntityManager()
     {
         if (!$this->client) {
-            $this->client = new ZF2Connector();
+            $this->client = new ZF3Connector();
             $this->client->setApplicationConfig($this->applicationConfig);
         }
 

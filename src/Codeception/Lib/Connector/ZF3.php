@@ -6,6 +6,7 @@ use Codeception\Lib\Connector\ZF2\PersistentServiceManager;
 use Symfony\Component\BrowserKit\Client;
 use Symfony\Component\BrowserKit\Request;
 use Symfony\Component\BrowserKit\Response;
+use Zend\Authentication\AuthenticationService;
 use Zend\Http\Request as HttpRequest;
 use Zend\Http\Headers as HttpHeaders;
 use Zend\Mvc\Application;
@@ -13,7 +14,7 @@ use Zend\Stdlib\Parameters;
 use Zend\Uri\Http as HttpUri;
 use Symfony\Component\BrowserKit\Request as BrowserKitRequest;
 
-class ZF2 extends Client
+class ZF3 extends Client
 {
     /**
      * @var \Zend\Mvc\ApplicationInterface
@@ -34,6 +35,10 @@ class ZF2 extends Client
      * @var PersistentServiceManager
      */
     private $persistentServiceManager;
+    /**
+     * @var array
+     */
+    protected $authData;
 
     /**
      * @param array $applicationConfig
@@ -44,6 +49,11 @@ class ZF2 extends Client
         $this->createApplication();
     }
 
+    public function setAuthData(array $authData): void
+    {
+        $this->authData = $authData;
+    }
+
     /**
      * @param Request $request
      *
@@ -52,6 +62,14 @@ class ZF2 extends Client
      */
     public function doRequest($request)
     {
+        if ($this->getInternalRequest()->getServer('PHP_AUTH_USER')) {
+            $_SERVER['PHP_AUTH_USER'] = $this->getInternalRequest()->getServer()['PHP_AUTH_USER'];
+        }
+
+        if ($this->getInternalRequest()->getServer('PHP_AUTH_PW')) {
+            $_SERVER['PHP_AUTH_PW'] = $this->getInternalRequest()->getServer()['PHP_AUTH_PW'];
+        }
+
         $this->createApplication();
         $zendRequest = $this->application->getRequest();
 
@@ -72,6 +90,7 @@ class ZF2 extends Client
             $post = $request->getParameters();
         }
 
+        $zendRequest->setServer(new Parameters($this->getInternalRequest()->getServer()));
         $zendRequest->setQuery(new Parameters($query));
         $zendRequest->setPost(new Parameters($post));
         $zendRequest->setFiles(new Parameters($request->getFiles()));
@@ -86,6 +105,7 @@ class ZF2 extends Client
         $zendRequest->setRequestUri($requestUri);
 
         $zendRequest->setHeaders($this->extractHeaders($request));
+
         $this->application->run();
 
         // get the response *after* the application has run, because other ZF
@@ -189,4 +209,40 @@ class ZF2 extends Client
             $events->detach([$sendResponseListener, 'sendResponse']); //ZF3
         }
     }
+
+//    public function authentication()
+//    {
+//        if (!empty($this->authData)) {
+//            $serviceManager = $this->application->getServiceManager();
+//
+//            /** @var \Zend\Authentication\AuthenticationService $auth */
+//            $authService = $serviceManager->get(AuthenticationService::class);
+//            $authService->clearIdentity();
+//
+//            /** @var \Users\Authentication\Adapter\AdapterChain $adapters */
+//            $adapters = $authService->getAdapter();
+//            $adapters->authenticate();
+//
+//            echo "<pre>";
+//            echo "<b>".__FILE__."</b><br/>";
+//            var_dump($adapters->authenticate());
+//            echo "</pre>";
+//            die();
+//
+//            $authService->getAdapter()
+//                ->setIdentity($this->authData['identity'])
+//                ->setCredential($this->authData['credential']);
+//            $result = $authService->authenticate();
+//
+//            echo "<pre>";
+//            echo "<b>".__FILE__."</b><br/>";
+//            var_dump($result);
+//            echo "</pre>";
+//            die();
+//
+//            if (!$result->isValid()) {
+//                throw new ModuleException(sprintf('User "%s" is not authorized', $this->authData['identity']));
+//            }
+//        }
+//    }
 }
