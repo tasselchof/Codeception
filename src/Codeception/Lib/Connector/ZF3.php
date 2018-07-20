@@ -67,11 +67,11 @@ class ZF3 extends Client
      */
     public function doRequest($request)
     {
-        if ($this->getInternalRequest()->getServer('PHP_AUTH_USER')) {
+        if (!empty($this->getInternalRequest()->getServer()['PHP_AUTH_USER'])) {
             $_SERVER['PHP_AUTH_USER'] = $this->getInternalRequest()->getServer()['PHP_AUTH_USER'];
         }
 
-        if ($this->getInternalRequest()->getServer('PHP_AUTH_PW')) {
+        if (!empty($this->getInternalRequest()->getServer()['PHP_AUTH_PW'])) {
             $_SERVER['PHP_AUTH_PW'] = $this->getInternalRequest()->getServer()['PHP_AUTH_PW'];
         }
 
