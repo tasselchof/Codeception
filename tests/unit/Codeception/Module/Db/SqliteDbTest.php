@@ -74,4 +74,28 @@ class SqliteDbTest extends TestsForDb
         $this->assertEquals($connection1, $connection2);
         $this->assertNotEquals($connection3, $connection2);
     }
+
+    /**
+     * @issue https://github.com/Codeception/Codeception/issues/5055
+     */
+    public function testHaveInDatabaseWithNonAutoIncrementSingleColumnPrimaryKey()
+    {
+        $this->module->driver->load(['CREATE TABLE Products
+(
+  id INTEGER PRIMARY KEY,
+  Product_Code VARCHAR(15) DEFAULT \'\' NOT NULL,
+  savailable INT DEFAULT \'0\' NOT NULL,
+  srequests INT DEFAULT \'0\' NOT NULL,
+  calculation_rating VARCHAR(3) DEFAULT \'A\' NOT NULL,
+  CONSTRAINT Product_Code UNIQUE (Product_Code)
+);']);
+        $this->module->haveInDatabase('Products', [
+            'Product_Code' => 'ABC',
+            'savailable' => 1,
+            'srequests' => 1,
+            'calculation_rating' => 1
+        ]);
+        $this->module->seeInDatabase('Products', ['Product_Code' => 'ABC']);
+
+    }
 }
