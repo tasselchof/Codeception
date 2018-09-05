@@ -170,12 +170,12 @@ class ZF3 extends Client
             throw new \PHPUnit\Framework\AssertionFailedError("Service $service is not available in container");
         }
 
-        if ($service === 'Doctrine\ORM\EntityManager' && !isset($this->persistentServiceManager)) {
-            if (!method_exists($serviceManager, 'addPeeringServiceManager')) {
-                throw new ModuleException('Codeception\Module\ZF2', 'integration with Doctrine2 module is not compatible with ZF3');
-            }
-            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
-        }
+//        if ($service === 'Doctrine\ORM\EntityManager' && !isset($this->persistentServiceManager)) {
+//            if (!method_exists($serviceManager, 'addPeeringServiceManager')) {
+//                throw new ModuleException('Codeception\Module\ZF2', 'integration with Doctrine2 module is not compatible with ZF3');
+//            }
+//            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
+//        }
 
         return $serviceManager->get($service);
     }
