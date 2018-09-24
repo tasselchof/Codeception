@@ -2,14 +2,16 @@
 namespace Codeception\Lib\Connector;
 
 use Codeception\Exception\ModuleException;
-use Codeception\Lib\Connector\ZF2\PersistentServiceManager;
+use Codeception\Lib\Connector\ZF3\PersistentServiceManager;
+use Doctrine\ORM\EntityManager;
 use Symfony\Component\BrowserKit\Client;
 use Symfony\Component\BrowserKit\Request;
 use Symfony\Component\BrowserKit\Response;
 use Zend\Authentication\AuthenticationService;
 use Zend\Http\Request as HttpRequest;
 use Zend\Http\Headers as HttpHeaders;
-use Zend\Mvc\Application;
+use Codeception\Lib\Connector\ZF3\Application;
+use Zend\ServiceManager\ServiceManager;
 use Zend\Stdlib\Parameters;
 use Zend\Uri\Http as HttpUri;
 use Symfony\Component\BrowserKit\Request as BrowserKitRequest;
@@ -46,17 +48,11 @@ class ZF3 extends Client
     public function setApplicationConfig($applicationConfig)
     {
         $this->applicationConfig = $applicationConfig;
-        $this->createApplication();
     }
 
     public function setAuthData(array $authData): void
     {
         $this->authData = $authData;
-    }
-
-    public function getApplication()
-    {
-        return $this->application;
     }
 
     /**
@@ -67,6 +63,8 @@ class ZF3 extends Client
      */
     public function doRequest($request)
     {
+        $this->destroyApplication();
+        
         if (!empty($this->getInternalRequest()->getServer()['PHP_AUTH_USER'])) {
             $_SERVER['PHP_AUTH_USER'] = $this->getInternalRequest()->getServer()['PHP_AUTH_USER'];
         }
@@ -75,8 +73,7 @@ class ZF3 extends Client
             $_SERVER['PHP_AUTH_PW'] = $this->getInternalRequest()->getServer()['PHP_AUTH_PW'];
         }
 
-        $this->createApplication();
-        $zendRequest = $this->application->getRequest();
+        $zendRequest = $this->getApplication()->getRequest();
 
         $uri = new HttpUri($request->getUri());
         $queryString = $uri->getQuery();
@@ -111,16 +108,16 @@ class ZF3 extends Client
 
         $zendRequest->setHeaders($this->extractHeaders($request));
 
-        $this->application->run();
+        $this->getApplication()->run();
 
         // get the response *after* the application has run, because other ZF
         //     libraries like API Agility may *replace* the application's response
         //
-        $zendResponse = $this->application->getResponse();
+        $zendResponse = $this->getApplication()->getResponse();
 
         $this->zendRequest = $zendRequest;
 
-        $exception = $this->application->getMvcEvent()->getParam('exception');
+        $exception = $this->getApplication()->getMvcEvent()->getParam('exception');
         if ($exception instanceof \Exception) {
             throw $exception;
         }
@@ -164,36 +161,55 @@ class ZF3 extends Client
 
     public function grabServiceFromContainer($service)
     {
-        $serviceManager = $this->application->getServiceManager();
+        $serviceManager = $this->getApplication()->getServiceManager();
 
         if (!$serviceManager->has($service)) {
             throw new \PHPUnit\Framework\AssertionFailedError("Service $service is not available in container");
         }
-
-//        if ($service === 'Doctrine\ORM\EntityManager' && !isset($this->persistentServiceManager)) {
-//            if (!method_exists($serviceManager, 'addPeeringServiceManager')) {
-//                throw new ModuleException('Codeception\Module\ZF2', 'integration with Doctrine2 module is not compatible with ZF3');
-//            }
-//            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
-//        }
 
         return $serviceManager->get($service);
     }
 
     public function addServiceToContainer($name, $service)
     {
-        if (!isset($this->persistentServiceManager)) {
-            $serviceManager = $this->application->getServiceManager();
-            if (!method_exists($serviceManager, 'addPeeringServiceManager')) {
-                throw new ModuleException('Codeception\Module\ZF2', 'addServiceToContainer method is not compatible with ZF3');
-            }
-            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
-            $serviceManager->addPeeringServiceManager($this->persistentServiceManager);
-            $serviceManager->setRetrieveFromPeeringManagerFirst(true);
-        }
-        $this->persistentServiceManager->setAllowOverride(true);
-        $this->persistentServiceManager->setService($name, $service);
-        $this->persistentServiceManager->setAllowOverride(false);
+//        if (!isset($this->persistentServiceManager)) {
+//            $serviceManager = $this->getApplication()->getServiceManager();
+//
+//            $this->persistentServiceManager = new PersistentServiceManager($serviceManager);
+//        }
+//
+//        $this->persistentServiceManager->setAllowOverride(true);
+//        $this->persistentServiceManager->setService($name, $service);
+//        $this->persistentServiceManager->setAllowOverride(false);
+
+        $this->getApplication()->getServiceManager()->setAllowOverride(true);
+        $this->getApplication()->getServiceManager()->setService($name, $service);
+    }
+
+    public function destroyApplication()
+    {
+        $serviceManager = $this->application->getServiceManager();
+
+        /** @var EntityManager $entityManager */
+        $entityManager = $serviceManager->get(EntityManager::class);
+
+        $query = $entityManager->getConnection()->prepare('SELECT count(*) as connections FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND state = :state');
+        $query->execute([
+            'state' => 'idle',
+        ]);
+
+        $result = $query->fetchAll()[0];
+
+        $return = [
+            'connections' => $result['connections'],
+        ];
+
+        $entityManager->getConnection()->close();
+        $entityManager->close();
+
+        unset($this->application);
+        
+        return $return;
     }
 
     private function createApplication()
@@ -201,53 +217,17 @@ class ZF3 extends Client
         $this->application = Application::init($this->applicationConfig);
         $serviceManager = $this->application->getServiceManager();
 
-        if (isset($this->persistentServiceManager)) {
-            $serviceManager->addPeeringServiceManager($this->persistentServiceManager);
-            $serviceManager->setRetrieveFromPeeringManagerFirst(true);
-        }
-
         $sendResponseListener = $serviceManager->get('SendResponseListener');
         $events = $this->application->getEventManager();
-        if (class_exists('Zend\EventManager\StaticEventManager')) {
-            $events->detach($sendResponseListener); //ZF2
-        } else {
-            $events->detach([$sendResponseListener, 'sendResponse']); //ZF3
-        }
+        $events->detach([$sendResponseListener, 'sendResponse']);
     }
 
-//    public function authentication()
-//    {
-//        if (!empty($this->authData)) {
-//            $serviceManager = $this->application->getServiceManager();
-//
-//            /** @var \Zend\Authentication\AuthenticationService $auth */
-//            $authService = $serviceManager->get(AuthenticationService::class);
-//            $authService->clearIdentity();
-//
-//            /** @var \Users\Authentication\Adapter\AdapterChain $adapters */
-//            $adapters = $authService->getAdapter();
-//            $adapters->authenticate();
-//
-//            echo "<pre>";
-//            echo "<b>".__FILE__."</b><br/>";
-//            var_dump($adapters->authenticate());
-//            echo "</pre>";
-//            die();
-//
-//            $authService->getAdapter()
-//                ->setIdentity($this->authData['identity'])
-//                ->setCredential($this->authData['credential']);
-//            $result = $authService->authenticate();
-//
-//            echo "<pre>";
-//            echo "<b>".__FILE__."</b><br/>";
-//            var_dump($result);
-//            echo "</pre>";
-//            die();
-//
-//            if (!$result->isValid()) {
-//                throw new ModuleException(sprintf('User "%s" is not authorized', $this->authData['identity']));
-//            }
-//        }
-//    }
+    public function getApplication()
+    {
+        if (empty($this->application)) {
+            $this->createApplication();
+        }
+
+        return $this->application;
+    }
 }

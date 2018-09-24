@@ -1,4 +1,5 @@
 <?php
+
 namespace Codeception\Module;
 
 use Codeception\Lib\Framework;
@@ -7,6 +8,7 @@ use Codeception\Configuration;
 use Codeception\Lib\Interfaces\DoctrineProvider;
 use Codeception\Lib\Interfaces\PartedModule;
 use Codeception\Util\ReflectionHelper;
+use Doctrine\ORM\EntityManager;
 use Zend\Console\Console;
 use Zend\EventManager\StaticEventManager;
 use Codeception\Lib\Connector\ZF3 as ZF3Connector;
@@ -55,9 +57,10 @@ use Codeception\Lib\Connector\ZF3 as ZF3Connector;
  */
 class ZF3 extends Framework implements DoctrineProvider, PartedModule
 {
-    protected $config = [
-        'config' => 'tests/application.config.php',
-    ];
+    protected $config
+        = [
+            'config' => 'tests/application.config.php',
+        ];
 
     /**
      * @var \Zend\Mvc\ApplicationInterface
@@ -74,6 +77,8 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
      */
     public $client;
 
+    protected $peeringServiceManager;
+
     protected $applicationConfig;
 
     protected $queries = 0;
@@ -84,62 +89,95 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
      */
     private $domainCollector = [];
 
-    public function _initialize()
+    public function createClient()
     {
-        $initAutoloaderFile = Configuration::projectDir() . 'init_autoloader.php';
-        if (file_exists($initAutoloaderFile)) {
-            require $initAutoloaderFile;
+        if (! empty($this->client)) {
+            $result = $this->client->destroyApplication();
+
+            $this->debug(
+                sprintf(
+                    '[ZF3] Destroyed application, stats: %s',
+                    var_export($result, true)));
+
+            unset($this->client);
         }
 
-        $this->applicationConfig = require Configuration::projectDir() . $this->config['config'];
-        if (isset($this->applicationConfig['module_listener_options']['config_cache_enabled'])) {
-            $this->applicationConfig['module_listener_options']['config_cache_enabled'] = false;
-        }
-        Console::overrideIsConsole(false);
+        $this->debug('[ZF3] Application created');
 
-        //grabServiceFromContainer may need client in beforeClass hooks of modules or helpers
         $this->client = new ZF3Connector();
         $this->client->setApplicationConfig($this->applicationConfig);
     }
 
+    public function _initialize()
+    {
+        $initAutoloaderFile = Configuration::projectDir()
+            . 'init_autoloader.php';
+        if (file_exists($initAutoloaderFile)) {
+            require $initAutoloaderFile;
+        }
+
+        $this->applicationConfig = require Configuration::projectDir()
+            . $this->config['config'];
+        if (isset($this->applicationConfig['module_listener_options']['config_cache_enabled'])) {
+            $this->applicationConfig['module_listener_options']['config_cache_enabled']
+                = false;
+        }
+        Console::overrideIsConsole(false);
+
+        $this->createClient();
+    }
+
     public function _before(TestInterface $test)
     {
-        $this->client = new ZF3Connector();
-        $this->client->setApplicationConfig($this->applicationConfig);
+        $this->createClient();
+
         $_SERVER['REQUEST_URI'] = '';
     }
 
     public function _after(TestInterface $test)
     {
         $_SESSION = [];
-        $_GET = [];
-        $_POST = [];
-        $_COOKIE = [];
+        $_GET     = [];
+        $_POST    = [];
+        $_COOKIE  = [];
 
-        if (class_exists('Zend\EventManager\StaticEventManager')) {
-            // reset singleton (ZF3)
-            StaticEventManager::resetInstance();
+        if (! empty($this->client)) {
+            $result = $this->client->destroyApplication();
+
+            $this->debug(
+                sprintf(
+                    '[ZF3] Destroyed application, stats: %s',
+                    var_export($result, true)));
+
+            unset($this->client);
         }
-
-        $this->queries = 0;
-        $this->time = 0;
 
         parent::_after($test);
     }
 
     public function _afterSuite()
     {
+        if (! empty($this->client)) {
+            $result = $this->client->destroyApplication();
+
+            $this->debug(
+                sprintf(
+                    '[ZF3] Destroyed application, stats: %s',
+                    var_export($result, true)));
+        }
+
+        $this->debug('[ZF3] Application destroyed');
+
         unset($this->client);
     }
 
     public function _getEntityManager()
     {
-        if (!$this->client) {
-            $this->client = new ZF3Connector();
-            $this->client->setApplicationConfig($this->applicationConfig);
+        if (! $this->client) {
+            $this->createClient();
         }
 
-        return $this->grabServiceFromContainer('Doctrine\ORM\EntityManager');
+        return $this->grabServiceFromContainer(EntityManager::class);
     }
 
     /**
@@ -153,6 +191,7 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
      * ```
      *
      * @param $service
+     *
      * @return mixed
      * @part services
      */
@@ -163,8 +202,10 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
 
     /**
      * Adds service to ZF2 container
+     *
      * @param string $name
      * @param object $service
+     *
      * @part services
      */
     public function addServiceToContainer($name, $service)
@@ -182,13 +223,15 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
      * ?>
      * ```
      *
-     * @param $routeName
+     * @param       $routeName
      * @param array $params
      */
     public function amOnRoute($routeName, array $params = [])
     {
         $router = $this->client->grabServiceFromContainer('router');
+
         $url = $router->assemble($params, ['name' => $routeName]);
+
         $this->amOnPage($url);
     }
 
@@ -202,13 +245,13 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
      * ?>
      * ```
      *
-     * @param $routeName
+     * @param       $routeName
      * @param array $params
      */
     public function seeCurrentRouteIs($routeName, array $params = [])
     {
         $router = $this->client->grabServiceFromContainer('router');
-        $url = $router->assemble($params, ['name' => $routeName]);
+        $url    = $router->assemble($params, ['name' => $routeName]);
         $this->seeCurrentUrlEquals($url);
     }
 
@@ -217,20 +260,26 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
         /**
          * @var Zend\Mvc\Router\Http\TreeRouteStack
          */
-        $router = $this->client->grabServiceFromContainer('router');
+        $router                = $this->client->grabServiceFromContainer(
+            'router');
         $this->domainCollector = [];
         $this->addInternalDomainsFromRoutes($router->getRoutes());
+
         return array_unique($this->domainCollector);
     }
 
     private function addInternalDomainsFromRoutes($routes)
     {
         foreach ($routes as $name => $route) {
-            if ($route instanceof \Zend\Mvc\Router\Http\Hostname || $route instanceof \Zend\Router\Http\Hostname) {
+            if ($route instanceof \Zend\Mvc\Router\Http\Hostname
+                || $route instanceof \Zend\Router\Http\Hostname) {
                 $this->addInternalDomain($route);
-            } elseif ($route instanceof \Zend\Mvc\Router\Http\Part || $route instanceof \Zend\Router\Http\Part) {
-                $parentRoute = ReflectionHelper::readPrivateProperty($route, 'route');
-                if ($parentRoute instanceof \Zend\Mvc\Router\Http\Hostname || $parentRoute instanceof \Zend\Mvc\Router\Http\Hostname) {
+            } elseif ($route instanceof \Zend\Mvc\Router\Http\Part
+                || $route instanceof \Zend\Router\Http\Part) {
+                $parentRoute = ReflectionHelper::readPrivateProperty(
+                    $route, 'route');
+                if ($parentRoute instanceof \Zend\Mvc\Router\Http\Hostname
+                    || $parentRoute instanceof \Zend\Mvc\Router\Http\Hostname) {
                     $this->addInternalDomain($parentRoute);
                 }
                 // this is necessary to instantiate child routes
@@ -245,8 +294,9 @@ class ZF3 extends Framework implements DoctrineProvider, PartedModule
 
     private function addInternalDomain($route)
     {
-        $regex = ReflectionHelper::readPrivateProperty($route, 'regex');
-        $this->domainCollector []= '/^' . $regex . '$/';
+        $regex                    = ReflectionHelper::readPrivateProperty(
+            $route, 'regex');
+        $this->domainCollector [] = '/^' . $regex . '$/';
     }
 
     public function _parts()
