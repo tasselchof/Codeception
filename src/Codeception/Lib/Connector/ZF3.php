@@ -10,7 +10,7 @@ use Symfony\Component\BrowserKit\Response;
 use Zend\Authentication\AuthenticationService;
 use Zend\Http\Request as HttpRequest;
 use Zend\Http\Headers as HttpHeaders;
-use Codeception\Lib\Connector\ZF3\Application;
+use Zend\Mvc\Application;
 use Zend\ServiceManager\ServiceManager;
 use Zend\Stdlib\Parameters;
 use Zend\Uri\Http as HttpUri;
